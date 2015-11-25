@@ -160,7 +160,7 @@ void MeshInstanceEditor::_menu_option(int p_option) {
 		} break;
 		case MENU_OPTION_CREATE_OUTLINE_MESH: {
 
-			outline_dialog->popup_centered_minsize();
+			outline_dialog->popup_centered(Vector2(200, 90));
 		} break;
 	}
 
@@ -212,10 +212,11 @@ MeshInstanceEditor::MeshInstanceEditor() {
 
 
 	options = memnew( MenuButton );
-	//add_child(options);
 	SpatialEditor::get_singleton()->add_control_to_menu_panel(options);
 
 	options->set_text("Mesh");
+	options->set_icon(EditorNode::get_singleton()->get_gui_base()->get_icon("MeshInstance","EditorIcons"));
+
 	options->get_popup()->add_item("Create Trimesh Static Body",MENU_OPTION_CREATE_STATIC_TRIMESH_BODY);
 	options->get_popup()->add_item("Create Convex Static Body",MENU_OPTION_CREATE_STATIC_CONVEX_BODY);
 	options->get_popup()->add_separator();
@@ -229,14 +230,20 @@ MeshInstanceEditor::MeshInstanceEditor() {
 	options->get_popup()->connect("item_pressed", this,"_menu_option");
 
 	outline_dialog = memnew( ConfirmationDialog );
-	outline_dialog->set_title("Outline Size: ");
+	outline_dialog->set_title("Create Outline Mesh");
+	outline_dialog->get_ok()->set_text("Create");
+
+	VBoxContainer *outline_dialog_vbc = memnew( VBoxContainer );
+	outline_dialog->add_child(outline_dialog_vbc);
+	outline_dialog->set_child_rect(outline_dialog_vbc);
+
 	outline_size = memnew( SpinBox );
 	outline_size->set_min(0.001);
 	outline_size->set_max(1024);
 	outline_size->set_step(0.001);
 	outline_size->set_val(0.05);
-	outline_dialog->add_child(outline_size);
-	outline_dialog->set_child_rect(outline_size);
+	outline_dialog_vbc->add_margin_child("Outline Size:",outline_size);
+
 	add_child(outline_dialog);
 	outline_dialog->connect("confirmed",this,"_create_outline_mesh");
 

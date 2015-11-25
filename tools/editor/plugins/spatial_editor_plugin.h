@@ -111,12 +111,21 @@ private:
 	bool orthogonal;
 	float gizmo_scale;
 
+	struct _RayResult {
+
+		Spatial* item;
+		float depth;
+		int handle;
+		_FORCE_INLINE_ bool operator<(const _RayResult& p_rr) const { return depth<p_rr.depth; }
+	};
+
 	void _update_name();
 	void _compute_edit(const Point2& p_point);
 	void _clear_selected();
 	void _select_clicked(bool p_append,bool p_single);
 	void _select(Spatial *p_node, bool p_append,bool p_single);
 	ObjectID _select_ray(const Point2& p_pos, bool p_append,bool &r_includes_current,int *r_gizmo_handle=NULL,bool p_alt_select=false);
+	void _find_items_at_pos(const Point2& p_pos,bool &r_includes_current,Vector<_RayResult> &results,bool p_alt_select=false);
 	Vector3 _get_ray_pos(const Vector2& p_pos) const;
 	Vector3 _get_ray(const Vector2& p_pos);
 	Point2 _point_to_screen(const Vector3& p_point);
@@ -136,8 +145,11 @@ private:
 	float get_fov() const;
 
 	ObjectID clicked;
+	Vector<_RayResult> selection_results;
 	bool clicked_includes_current;
 	bool clicked_wants_append;
+
+	PopupMenu *selection_menu;
 
 	enum NavigationScheme {
 		NAVIGATION_GODOT,
@@ -225,6 +237,8 @@ private:
 	void _toggle_camera_preview(bool);
 	void _init_gizmo_instance(int p_idx);
 	void _finish_gizmo_instances();
+	void _selection_result_pressed(int);
+	void _selection_menu_hide();
 
 
 protected:
@@ -239,7 +253,7 @@ public:
 	void set_state(const Dictionary& p_state);
 	Dictionary get_state() const;
 	void reset();
-
+	Viewport *get_viewport_node() { return viewport; }
 
 
 	SpatialEditorViewport(SpatialEditor *p_spatial_editor,EditorNode *p_editor,int p_index);
@@ -422,6 +436,7 @@ private:
 	HBoxContainer *hbc_menu;
 
 
+
 //
 //
 	void _generate_selection_box();
@@ -513,6 +528,11 @@ public:
 	void set_over_gizmo_handle(int idx) { over_gizmo_handle=idx; }
 
 	void set_can_preview(Camera* p_preview);
+
+	SpatialEditorViewport *get_editor_viewport(int p_idx) {
+		ERR_FAIL_INDEX_V(p_idx,4,NULL);
+		return viewports[p_idx];
+	}
 
 	Camera *get_camera() { return NULL; }
 	void edit(Spatial *p_spatial);

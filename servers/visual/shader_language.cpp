@@ -1043,6 +1043,7 @@ const ShaderLanguage::BuiltinsDef ShaderLanguage::vertex_builtins_defs[]={
 	{ "SRC_TANGENT", TYPE_VEC3},
 	{ "SRC_BINORMALF", TYPE_FLOAT},
 
+	{ "POSITION", TYPE_VEC4 },
 	{ "VERTEX", TYPE_VEC3},
 	{ "NORMAL", TYPE_VEC3},
 	{ "TANGENT", TYPE_VEC3},
@@ -1112,7 +1113,8 @@ const ShaderLanguage::BuiltinsDef ShaderLanguage::light_builtins_defs[]={
 	{ "SPECULAR_EXP", TYPE_FLOAT},
 	{ "SHADE_PARAM", TYPE_FLOAT},
 	{ "LIGHT", TYPE_VEC3},
-	{ "POINT_COORD", TYPE_VEC2},
+	{ "SHADOW", TYPE_VEC3 },
+	{ "POINT_COORD", TYPE_VEC2 },
 //	{ "SCREEN_POS", TYPE_VEC2},
 //	{ "SCREEN_TEXEL_SIZE", TYPE_VEC2},
 	{ "TIME", TYPE_FLOAT},

@@ -323,11 +323,21 @@ LRESULT OS_Windows::WndProc(HWND hWnd,UINT uMsg, WPARAM	wParam,	LPARAM	lParam) {
 
 			old_invalid=true;
 			outside=true;
+			if (main_loop && mouse_mode!=MOUSE_MODE_CAPTURED)
+				main_loop->notification(MainLoop::NOTIFICATION_WM_MOUSE_EXIT);
+			if (input)
+				input->set_mouse_in_window(false);
 
 		} break;
 		case WM_MOUSEMOVE: {
 
 			if (outside) {
+				//mouse enter
+
+				if (main_loop && mouse_mode!=MOUSE_MODE_CAPTURED)
+					main_loop->notification(MainLoop::NOTIFICATION_WM_MOUSE_ENTER);
+				if (input)
+					input->set_mouse_in_window(true);
 
 				CursorShape c=cursor_shape;
 				cursor_shape=CURSOR_MAX;
@@ -1177,7 +1187,7 @@ void OS_Windows::initialize(const VideoMode& p_desired,int p_video_driver,int p_
 	physics_server = memnew( PhysicsServerSW );
 	physics_server->init();
 
-	physics_2d_server = memnew( Physics2DServerSW );
+	physics_2d_server = Physics2DServerWrapMT::init_server<Physics2DServerSW>();
 	physics_2d_server->init();
 
 	if (!is_no_window_mode_enabled()) {
@@ -1340,7 +1350,9 @@ void OS_Windows::finalize() {
 		memdelete(main_loop);
 
 	main_loop=NULL;
-	
+
+	memdelete(input);
+
 	visual_server->finish();
 	memdelete(visual_server);
 #ifdef OPENGL_ENABLED
@@ -1363,17 +1375,19 @@ void OS_Windows::finalize() {
 //		memdelete(debugger_connection_console);
 //}
 
-	audio_server->finish();
-	memdelete(audio_server);
 	memdelete(sample_manager);
 
-	memdelete(input);
+	audio_server->finish();
+	memdelete(audio_server);
 
 	physics_server->finish();
 	memdelete(physics_server);
 
 	physics_2d_server->finish();
 	memdelete(physics_2d_server);
+
+	joystick_change_queue.clear();
+	monitor_info.clear();
 
 }
 void OS_Windows::finalize_core() {
@@ -1751,73 +1765,96 @@ bool OS_Windows::is_window_maximized() const{
 }
 
 
-void OS_Windows::print_error(const char* p_function,const char* p_file,int p_line,const char *p_code,const char*p_rationale,ErrorType p_type) {
+void OS_Windows::print_error(const char* p_function, const char* p_file, int p_line, const char* p_code, const char* p_rationale, ErrorType p_type) {
 
-	HANDLE hCon=GetStdHandle(STD_OUTPUT_HANDLE);
-	if (!hCon || hCon==INVALID_HANDLE_VALUE) {
-		if (p_rationale && p_rationale[0]) {
+	HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (!hCon || hCon == INVALID_HANDLE_VALUE) {
 
-			print("\E[1;31;40mERROR: %s: \E[1;37;40m%s\n",p_function,p_rationale);
-			print("\E[0;31;40m   At: %s:%i.\E[0;0;37m\n",p_file,p_line);
+		const char* err_details;
+		if (p_rationale && p_rationale[0])
+			err_details = p_rationale;
+		else
+			err_details = p_code;
 
-		} else {
-			print("\E[1;31;40mERROR: %s: \E[1;37;40m%s\n",p_function,p_code);
-			print("\E[0;31;40m   At: %s:%i.\E[0;0;37m\n",p_file,p_line);
-
+		switch(p_type) {
+			case ERR_ERROR:
+				print("ERROR: %s: %s\n", p_function, err_details);
+				print("   At: %s:%i\n", p_file, p_line);
+				break;
+			case ERR_WARNING:
+				print("WARNING: %s: %s\n", p_function, err_details);
+				print("     At: %s:%i\n", p_file, p_line);
+				break;
+			case ERR_SCRIPT:
+				print("SCRIPT ERROR: %s: %s\n", p_function, err_details);
+				print("          At: %s:%i\n", p_file, p_line);
+				break;
 		}
+
 	} else {
 
 		CONSOLE_SCREEN_BUFFER_INFO sbi; //original
-		GetConsoleScreenBufferInfo(hCon,&sbi);
+		GetConsoleScreenBufferInfo(hCon, &sbi);
 
-		SetConsoleTextAttribute(hCon,sbi.wAttributes);
+		WORD current_fg = sbi.wAttributes & (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+		WORD current_bg = sbi.wAttributes & (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY);
 
-
-
-		uint32_t basecol=0;
+		uint32_t basecol = 0;
 		switch(p_type) {
 			case ERR_ERROR: basecol = FOREGROUND_RED; break;
-			case ERR_WARNING: basecol = FOREGROUND_RED|FOREGROUND_GREEN; break;
-			case ERR_SCRIPT: basecol = FOREGROUND_GREEN; break;
+			case ERR_WARNING: basecol = FOREGROUND_RED | FOREGROUND_GREEN; break;
+			case ERR_SCRIPT: basecol = FOREGROUND_RED | FOREGROUND_BLUE; break;
 		}
+
+		basecol |= current_bg;
 
 		if (p_rationale && p_rationale[0]) {
 
-			SetConsoleTextAttribute(hCon,basecol|FOREGROUND_INTENSITY);
-
-
+			SetConsoleTextAttribute(hCon, basecol | FOREGROUND_INTENSITY);
 			switch(p_type) {
 				case ERR_ERROR: print("ERROR: "); break;
 				case ERR_WARNING: print("WARNING: "); break;
 				case ERR_SCRIPT: print("SCRIPT ERROR: "); break;
 			}
 
-			SetConsoleTextAttribute(hCon,FOREGROUND_RED|FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_INTENSITY);
-			print(" %s\n",p_rationale);
-			SetConsoleTextAttribute(hCon,basecol);
-			print("At: ");
-			SetConsoleTextAttribute(hCon,FOREGROUND_RED|FOREGROUND_BLUE|FOREGROUND_GREEN);
-			print(" %s:%i\n",p_file,p_line);
+			SetConsoleTextAttribute(hCon, current_fg | current_bg | FOREGROUND_INTENSITY);
+			print("%s\n", p_rationale);
 
+			SetConsoleTextAttribute(hCon, basecol);
+			switch (p_type) {
+				case ERR_ERROR: print("   At: "); break;
+				case ERR_WARNING: print("     At: "); break;
+				case ERR_SCRIPT: print("          At: "); break;
+			}
+
+			SetConsoleTextAttribute(hCon, current_fg | current_bg);
+			print("%s:%i\n", p_file, p_line);
 
 		} else {
-			SetConsoleTextAttribute(hCon,basecol|FOREGROUND_INTENSITY);
+
+			SetConsoleTextAttribute(hCon, basecol | FOREGROUND_INTENSITY);
 			switch(p_type) {
-				case ERR_ERROR: print("ERROR: %s: ",p_function); break;
-				case ERR_WARNING: print("WARNING: %s: ",p_function); break;
-				case ERR_SCRIPT: print("SCRIPT ERROR: %s: ",p_function); break;
+				case ERR_ERROR: print("ERROR: %s: ", p_function); break;
+				case ERR_WARNING: print("WARNING: %s: ", p_function); break;
+				case ERR_SCRIPT: print("SCRIPT ERROR: %s: ", p_function); break;
 			}
-			SetConsoleTextAttribute(hCon,FOREGROUND_RED|FOREGROUND_BLUE|FOREGROUND_GREEN|FOREGROUND_INTENSITY);
-			print(" %s\n",p_code);
-			SetConsoleTextAttribute(hCon,basecol);
-			print("At: ");
-			SetConsoleTextAttribute(hCon,FOREGROUND_RED|FOREGROUND_BLUE|FOREGROUND_GREEN);
-			print(" %s:%i\n",p_file,p_line);
+
+			SetConsoleTextAttribute(hCon, current_fg | current_bg | FOREGROUND_INTENSITY);
+			print("%s\n", p_code);
+
+			SetConsoleTextAttribute(hCon, basecol);
+			switch (p_type) {
+				case ERR_ERROR: print("   At: "); break;
+				case ERR_WARNING: print("     At: "); break;
+				case ERR_SCRIPT: print("          At: "); break;
+			}
+
+			SetConsoleTextAttribute(hCon, current_fg | current_bg);
+			print("%s:%i\n", p_file, p_line);
 		}
 
-		SetConsoleTextAttribute(hCon,sbi.wAttributes);
+		SetConsoleTextAttribute(hCon, sbi.wAttributes);
 	}
-
 }
 
 
@@ -1826,10 +1863,14 @@ String OS_Windows::get_name() {
 	return "Windows";
 }
 
-OS::Date OS_Windows::get_date() const {
+OS::Date OS_Windows::get_date(bool utc) const {
 
 	SYSTEMTIME systemtime;
-	GetSystemTime(&systemtime);
+	if (utc)
+		GetSystemTime(&systemtime);
+	else
+		GetLocalTime(&systemtime);
+
 	Date date;
 	date.day=systemtime.wDay;
 	date.month=Month(systemtime.wMonth);
@@ -1838,16 +1879,36 @@ OS::Date OS_Windows::get_date() const {
 	date.dst=false;
 	return date;
 }
-OS::Time OS_Windows::get_time() const {
+OS::Time OS_Windows::get_time(bool utc) const {
 
 	SYSTEMTIME systemtime;
-	GetLocalTime(&systemtime);
+	if (utc)
+		GetSystemTime(&systemtime);
+	else
+		GetLocalTime(&systemtime);
 
 	Time time;
 	time.hour=systemtime.wHour;
 	time.min=systemtime.wMinute;
 	time.sec=systemtime.wSecond;
 	return time;
+}
+
+OS::TimeZoneInfo OS_Windows::get_time_zone_info() const {
+	TIME_ZONE_INFORMATION info;
+	bool daylight = false;
+	if (GetTimeZoneInformation(&info) == TIME_ZONE_ID_DAYLIGHT)
+		daylight = true;
+
+	TimeZoneInfo ret;
+	if (daylight) {
+		ret.name = info.DaylightName;
+	} else {
+		ret.name = info.StandardName;
+	}
+
+	ret.bias = info.Bias;
+	return ret;
 }
 
 uint64_t OS_Windows::get_unix_time() const {
@@ -1871,6 +1932,12 @@ uint64_t OS_Windows::get_unix_time() const {
 
 	return (*(uint64_t*)&ft - *(uint64_t*)&fep) / 10000000;
 };
+
+uint64_t OS_Windows::get_system_time_msec() const {
+	SYSTEMTIME st;
+	GetSystemTime(&st);
+	return st.wMilliseconds;
+}
 
 void OS_Windows::delay_usec(uint32_t p_usec) const {
 
@@ -2052,7 +2119,7 @@ String OS_Windows::get_executable_path() const {
 	wchar_t bufname[4096];
 	GetModuleFileNameW(NULL,bufname,4096);
 	String s= bufname;
-	print_line("EXEC PATHP¨®: "+s);
+	print_line("EXEC PATHP??: "+s);
 	return s;
 }
 

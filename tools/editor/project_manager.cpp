@@ -144,7 +144,7 @@ class NewProjectDialog : public ConfirmationDialog {
 
 			fdialog->set_mode(FileDialog::MODE_OPEN_FILE);
 			fdialog->clear_filters();
-			fdialog->add_filter("engine.cfg ; "_MKSTR(VERSION_NAME)" Project");
+			fdialog->add_filter("engine.cfg ; " _MKSTR(VERSION_NAME) " Project");
 		} else {
 			fdialog->set_mode(FileDialog::MODE_OPEN_DIR);
 		}
@@ -193,7 +193,7 @@ class NewProjectDialog : public ConfirmationDialog {
 				f->store_line("\n");
 				f->store_line("[application]");
 				f->store_line("name=\""+project_name->get_text()+"\"");
-				f->store_line("icon=\"icon.png\"");
+				f->store_line("icon=\"res://icon.png\"");
 
 				memdelete(f);
 
@@ -245,7 +245,8 @@ public:
 		project_name->clear();
 
 		if (import_mode) {
-			set_title("Import Existing Project:");
+			set_title("Import Existing Project");
+			get_ok()->set_text("Import");
 			pp->set_text("Project Path: (Must exist)");
 			pn->set_text("Project Name:");
 			pn->hide();
@@ -254,7 +255,8 @@ public:
 			popup_centered(Size2(500,125));
 
 		} else {
-			set_title("Create New Project:");
+			set_title("Create New Project");
+			get_ok()->set_text("Create");
 			pp->set_text("Project Path:");
 			pn->set_text("Project Name:");
 			pn->show();
@@ -313,7 +315,6 @@ public:
 		l->add_color_override("font_color",Color(1,0.4,0.3,0.8));
 		l->set_align(Label::ALIGN_CENTER);
 
-		get_ok()->set_text("Create");
 		DirAccess *d = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 		project_path->set_text(d->get_current_dir());
 		memdelete(d);
@@ -479,20 +480,25 @@ void ProjectManager::_load_recent_projects() {
 		bool favorite = (_name.begins_with("favorite_projects/"))?true:false;
 
 		uint64_t last_modified = 0;
-		if (FileAccess::exists(conf))
+		if (FileAccess::exists(conf)) {
 			last_modified = FileAccess::get_modified_time(conf);
-		String fscache = path.plus_file(".fscache");
-		if (FileAccess::exists(fscache)) {
-			uint64_t cache_modified = FileAccess::get_modified_time(fscache);
-			if ( cache_modified > last_modified )
-				last_modified = cache_modified;
-		}
 
-		ProjectItem item(project, path, conf, last_modified, favorite);
-		if (favorite)
-			favorite_projects.push_back(item);
-		else
-			projects.push_back(item);
+			String fscache = path.plus_file(".fscache");
+			if (FileAccess::exists(fscache)) {
+				uint64_t cache_modified = FileAccess::get_modified_time(fscache);
+				if ( cache_modified > last_modified )
+					last_modified = cache_modified;
+			}
+
+			ProjectItem item(project, path, conf, last_modified, favorite);
+			if (favorite)
+				favorite_projects.push_back(item);
+			else
+				projects.push_back(item);
+		} else {
+			//project doesn't exist on disk but it's in the XML settings file
+			EditorSettings::get_singleton()->erase(_name); //remove it
+		}
 	}
 
 	projects.sort();
@@ -600,6 +606,8 @@ void ProjectManager::_load_recent_projects() {
 	erase_btn->set_disabled(selected_list.size()<1);
 	open_btn->set_disabled(selected_list.size()<1);
 	run_btn->set_disabled(selected_list.size()<1 || (selected_list.size()==1 && single_selected_main==""));
+
+	EditorSettings::get_singleton()->save();
 }
 
 void ProjectManager::_open_project_confirm() {
@@ -615,11 +623,6 @@ void ProjectManager::_open_project_confirm() {
 		args.push_back(path);
 
 		args.push_back("-editor");
-
-		const String &selected_main = E->get();
-		if (selected_main!="") {
-			args.push_back(selected_main);
-		}
 
 		String exec = OS::get_singleton()->get_executable_path();
 
@@ -819,6 +822,7 @@ ProjectManager::ProjectManager() {
 	if (!EditorSettings::get_singleton())
 		EditorSettings::create();
 
+	FileDialog::set_default_show_hidden_files(EditorSettings::get_singleton()->get("file_dialog/show_hidden_files"));
 
 	set_area_as_parent_rect();
 	Panel *panel = memnew( Panel );
@@ -837,7 +841,7 @@ ProjectManager::ProjectManager() {
 	l->set_align(Label::ALIGN_CENTER);
 	vb->add_child(l);
 	l = memnew( Label );
-	l->set_text("v"VERSION_MKSTRING);
+	l->set_text("v" VERSION_MKSTRING);
 	//l->add_font_override("font",get_font("bold","Fonts"));
 	l->set_align(Label::ALIGN_CENTER);
 	vb->add_child(l);

@@ -47,6 +47,12 @@ class ProjectSettings : public AcceptDialog {
 	UndoRedo *undo_redo;
 	PropertyEditor *globals_editor;
 
+	HBoxContainer *search_bar;
+	ToolButton *search_button;
+	LineEdit *search_box;
+	ToolButton *clear_button;
+
+	HBoxContainer *add_prop_bar;
 	ConfirmationDialog *message;
 	LineEdit *category;
 	LineEdit *property;
@@ -67,19 +73,19 @@ class ProjectSettings : public AcceptDialog {
 
 	InputEvent last_wait_for_key;
 
-	FileDialog *translation_file_open;
+	EditorFileDialog *translation_file_open;
 	Tree *translation_list;
 
 
 	Button *translation_res_option_add_button;
-	FileDialog *translation_res_file_open;
-	FileDialog *translation_res_option_file_open;
+	EditorFileDialog *translation_res_file_open;
+	EditorFileDialog *translation_res_option_file_open;
 	Tree *translation_remap;
 	Tree *translation_remap_options;
 
 
 	Tree *autoload_list;
-	FileDialog *autoload_file_open;
+	EditorFileDialog *autoload_file_open;
 	LineEdit *autoload_add_name;
 	LineEdit *autoload_add_path;
 
@@ -129,6 +135,9 @@ class ProjectSettings : public AcceptDialog {
 	void _translation_res_option_add(const String& p_path);
 	void _translation_res_option_changed();
 	void _translation_res_option_delete(Object *p_item,int p_column, int p_button);
+
+	void _toggle_search_bar(bool p_pressed);
+	void _clear_search_box();
 
 	ProjectSettings();
 

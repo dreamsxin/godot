@@ -37,15 +37,17 @@
 #include "scene/gui/scroll_bar.h"
 #include "scene/gui/tool_button.h"
 #include "scene/gui/file_dialog.h"
+#include "scene/gui/tab_container.h"
 
 #include "scene/resources/animation.h"
 #include "scene/animation/animation_cache.h"
 #include "scene_tree_editor.h"
 #include "editor_data.h"
 #include "property_editor.h"
-
+#include "scene_tree_editor.h"
 
 class AnimationKeyEdit;
+class AnimationCurveEdit;
 
 class AnimationKeyEditor : public VBoxContainer  {
 
@@ -68,9 +70,9 @@ class AnimationKeyEditor : public VBoxContainer  {
 
 	enum {
 
-		TRACK_MENU_ADD_VALUE_TRACK,
-		TRACK_MENU_ADD_TRANSFORM_TRACK,
-		TRACK_MENU_ADD_CALL_TRACK,
+		ADD_TRACK_MENU_ADD_VALUE_TRACK,
+		ADD_TRACK_MENU_ADD_TRANSFORM_TRACK,
+		ADD_TRACK_MENU_ADD_CALL_TRACK,
 		TRACK_MENU_SCALE,
 		TRACK_MENU_SCALE_PIVOT,
 		TRACK_MENU_MOVE_UP,
@@ -86,7 +88,13 @@ class AnimationKeyEditor : public VBoxContainer  {
 		TRACK_MENU_SET_ALL_TRANS_OUTIN,
 		TRACK_MENU_NEXT_STEP,
 		TRACK_MENU_PREV_STEP,
-		TRACK_MENU_OPTIMIZE
+		TRACK_MENU_OPTIMIZE,
+		CURVE_SET_LINEAR,
+		CURVE_SET_IN,
+		CURVE_SET_OUT,
+		CURVE_SET_INOUT,
+		CURVE_SET_OUTIN,
+		CURVE_SET_CONSTANT
 	};
 
 	struct MouseOver {
@@ -169,6 +177,14 @@ class AnimationKeyEditor : public VBoxContainer  {
 	ToolButton *move_down_button;
 	ToolButton *remove_button;
 
+	ToolButton *curve_linear;
+	ToolButton *curve_in;
+	ToolButton *curve_out;
+	ToolButton *curve_inout;
+	ToolButton *curve_outin;
+	ToolButton *curve_constant;
+
+
 	ConfirmationDialog *optimize_dialog;
 	SpinBox *optimize_linear_error;
 	SpinBox *optimize_angular_error;
@@ -176,6 +192,7 @@ class AnimationKeyEditor : public VBoxContainer  {
 
 	SpinBox *step;
 
+	MenuButton *menu_add_track;
 	MenuButton *menu_track;
 
 	HScrollBar *h_scroll;
@@ -183,12 +200,14 @@ class AnimationKeyEditor : public VBoxContainer  {
 
 	Control *track_editor;
 	Control *track_pos;
+	TabContainer *key_editor_tab;
 
 	ConfirmationDialog *scale_dialog;
 	SpinBox *scale;
 
-	PopupDialog *key_edit_dialog;
 	PropertyEditor *key_editor;	
+
+	SceneTreeDialog *call_select;
 
 	Ref<Animation> animation;
 	void _update_paths();
@@ -203,6 +222,7 @@ class AnimationKeyEditor : public VBoxContainer  {
 
 
 	AnimationKeyEdit *key_edit;
+	AnimationCurveEdit *curve_edit;
 
 	bool inserting;
 
@@ -220,6 +240,7 @@ class AnimationKeyEditor : public VBoxContainer  {
 		int track_idx;
 		Variant value;
 		String query;
+		bool advance;
 	};/* insert_data;*/
 
 	bool insert_query;
@@ -254,7 +275,7 @@ class AnimationKeyEditor : public VBoxContainer  {
 	void _scale();
 
 
-
+	void _clear_selection();
 
 	//void _browse_path();
 
@@ -266,17 +287,23 @@ class AnimationKeyEditor : public VBoxContainer  {
 
 	void _scroll_changed(double);
 
+	void _menu_add_track(int p_type);
 	void _menu_track(int p_type);
 
 	void _clear_selection_for_anim(const Ref<Animation>& p_anim);
 	void _select_at_anim(const Ref<Animation>& p_anim,int p_track,float p_pos);
+	void _curve_transition_changed(float p_what);
 
 	PropertyInfo _find_hint_for_track(int p_idx);
 
 	void _create_value_item(int p_type);
 	void _pane_drag(const Point2& p_delta);
+	bool _edit_if_single_selection();
 
+	void _toggle_edit_curves();
 	void _animation_len_update();
+
+	void _add_call_track(const NodePath& p_base);
 
 	void _root_removed();
 protected:
@@ -296,7 +323,7 @@ public:
 
 	void set_anim_pos(float p_pos);
 	void insert_node_value_key(Node* p_node, const String& p_property,const Variant& p_value,bool p_only_if_exists=false);
-	void insert_value_key(const String& p_property,const Variant& p_value);
+	void insert_value_key(const String& p_property, const Variant& p_value, bool p_advance);
 	void insert_transform_key(Spatial *p_node,const String& p_sub,const Transform& p_xform);
 
 	AnimationKeyEditor(UndoRedo *p_undo_redo, EditorHistory *p_history, EditorSelection *p_selection);

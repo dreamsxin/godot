@@ -170,7 +170,14 @@ void PopupMenu::_activate_submenu(int over) {
 	Point2 p = get_global_pos();
 	Rect2 pr(p,get_size());
 	Ref<StyleBox> style = get_stylebox("panel");
-	pm->set_pos(p+Point2(get_size().width,items[over]._ofs_cache-style->get_offset().y));
+
+	Point2 pos = p+Point2(get_size().width,items[over]._ofs_cache-style->get_offset().y);
+	Size2 size = pm->get_size();
+	// fix pos
+	if (pos.x+size.width > get_viewport_rect().size.width)
+		pos.x=p.x-size.width;
+
+	pm->set_pos(pos);
 	pm->popup();
 
 	PopupMenu *pum = pm->cast_to<PopupMenu>();
@@ -323,8 +330,13 @@ void PopupMenu::_input_event(const InputEvent &p_event) {
 						invalidated_click=false;
 						break;
 					}
-					if (over<0 || items[over].separator || items[over].disabled)
+					if (over<0) {
+						hide();
 						break; //non-activable
+					}
+
+					if (items[over].separator || items[over].disabled)
+						break;
 
 					if (items[over].submenu!="") {
 
@@ -360,8 +372,11 @@ void PopupMenu::_input_event(const InputEvent &p_event) {
 			int over=_get_mouse_over(Point2(m.x,m.y));
 			int id = (over<0 || items[over].separator || items[over].disabled)?-1:items[over].ID;
 
-			if (id<0)
+			if (id<0) {
+				mouse_over=-1;
+				update();
 				break;
+			}
 
 			if (items[over].submenu!="" && submenu_over!=over) {
 				submenu_over=over;
@@ -738,10 +753,18 @@ int PopupMenu::find_item_by_accelerator(uint32_t p_accel) const {
 
 void PopupMenu::activate_item(int p_item) {
 
-
 	ERR_FAIL_INDEX(p_item,items.size());
 	ERR_FAIL_COND(items[p_item].separator);
 	emit_signal("item_pressed",items[p_item].ID);
+
+	//hide all parent PopupMenue's
+	Node *next = get_parent();
+	PopupMenu *pop = next->cast_to<PopupMenu>();
+	while (pop) {
+		pop->hide();
+		next = next->get_parent();
+		pop = next->cast_to<PopupMenu>();
+	}
 	hide();
 
 }
@@ -764,6 +787,7 @@ void PopupMenu::add_separator() {
 void PopupMenu::clear()  {
 
 	items.clear();
+	mouse_over=-1;
 	update();
 	idcount=0;
 

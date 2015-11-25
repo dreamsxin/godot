@@ -90,6 +90,23 @@ class CanvasItemEditor : public VBoxContainer {
 		UNGROUP_SELECTED,
 		ALIGN_HORIZONTAL,
 		ALIGN_VERTICAL,
+		ANCHOR_ALIGN_TOP_LEFT,
+		ANCHOR_ALIGN_TOP_RIGHT,
+		ANCHOR_ALIGN_BOTTOM_LEFT,
+		ANCHOR_ALIGN_BOTTOM_RIGHT,
+		ANCHOR_ALIGN_CENTER_LEFT,
+		ANCHOR_ALIGN_CENTER_RIGHT,
+		ANCHOR_ALIGN_CENTER_TOP,
+		ANCHOR_ALIGN_CENTER_BOTTOM,
+		ANCHOR_ALIGN_CENTER,
+		ANCHOR_ALIGN_TOP_WIDE,
+		ANCHOR_ALIGN_LEFT_WIDE,
+		ANCHOR_ALIGN_RIGHT_WIDE,
+		ANCHOR_ALIGN_BOTTOM_WIDE,
+		ANCHOR_ALIGN_VCENTER_WIDE,
+		ANCHOR_ALIGN_HCENTER_WIDE,
+		ANCHOR_ALIGN_WIDE,
+
 		SPACE_HORIZONTAL,
 		SPACE_VERTICAL,
 		EXPAND_TO_PARENT,
@@ -133,6 +150,7 @@ class CanvasItemEditor : public VBoxContainer {
 	};
 
 	EditorSelection *editor_selection;
+	bool additive_selection;
 
 	Tool tool;
 	bool first_update;
@@ -165,6 +183,18 @@ class CanvasItemEditor : public VBoxContainer {
 
 
 	MenuOption last_option;
+
+	struct _SelectResult {
+
+		CanvasItem* item;
+		float z;
+		bool has_z;
+		_FORCE_INLINE_ bool operator<(const _SelectResult& p_rr) const {
+			return has_z && p_rr.has_z ? p_rr.z < z : p_rr.has_z;
+		}
+	};
+
+	Vector<_SelectResult> selection_results;
 
 	struct LockList {
 		Point2 pos;
@@ -225,11 +255,14 @@ class CanvasItemEditor : public VBoxContainer {
 	MenuButton *view_menu;
 	HBoxContainer *animation_hb;
 	MenuButton *animation_menu;
+	MenuButton *anchor_menu;
 
 	Button *key_loc_button;
 	Button *key_rot_button;
 	Button *key_scale_button;
 	Button *key_insert_button;
+
+	PopupMenu *selection_menu;
 
 	//PopupMenu *popup;
 	DragType drag;
@@ -258,7 +291,10 @@ class CanvasItemEditor : public VBoxContainer {
 
 	int handle_len;
 	CanvasItem* _select_canvas_item_at_pos(const Point2 &p_pos,Node* p_node,const Matrix32& p_parent_xform,const Matrix32& p_canvas_xform);
+	void _find_canvas_items_at_pos(const Point2 &p_pos,Node* p_node,const Matrix32& p_parent_xform,const Matrix32& p_canvas_xform, Vector<_SelectResult> &r_items);
 	void _find_canvas_items_at_rect(const Rect2& p_rect,Node* p_node,const Matrix32& p_parent_xform,const Matrix32& p_canvas_xform,List<CanvasItem*> *r_items);
+
+	bool _select(CanvasItem *item, Point2 p_click_pos, bool p_append, bool p_drag=true);
 
 	ConfirmationDialog *snap_dialog;
 	
@@ -286,6 +322,9 @@ class CanvasItemEditor : public VBoxContainer {
 	void _append_canvas_item(CanvasItem *p_item);
 	void _dialog_value_changed(double);
 	void _snap_changed();
+	void _selection_result_pressed(int);
+	void _selection_menu_hide();
+
 	UndoRedo *undo_redo;
 
 	Point2 _find_topleftmost_point();
@@ -304,6 +343,8 @@ class CanvasItemEditor : public VBoxContainer {
 
 	void _viewport_input_event(const InputEvent& p_event);
 	void _viewport_draw();
+
+	void _set_anchor(Control::AnchorType p_left,Control::AnchorType p_top,Control::AnchorType p_right,Control::AnchorType p_bottom);
 
 	HSplitContainer *palette_split;
 	VSplitContainer *bottom_split;

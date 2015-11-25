@@ -88,7 +88,7 @@
 
 import os
 
-import sys	
+import sys
 
 
 def is_active():
@@ -134,8 +134,8 @@ def can_build():
 		if (os.getenv("MINGW64_PREFIX")):
 			mingw64=os.getenv("MINGW64_PREFIX")
 			
-		test = "gcc --version >/dev/null"
-		if os.system(mingw+test) == 0 or os.system(mingw64+test) ==0 or os.system(mingw32+test) ==0 :
+		test = "gcc --version &>/dev/null"
+		if (os.system(mingw+test) == 0 or os.system(mingw64+test) == 0 or os.system(mingw32+test) == 0):
 			return True
 			
 	return False
@@ -150,7 +150,7 @@ def get_opts():
 		mingw32 = "i686-w64-mingw32-"
 		mingw64 = "x86_64-w64-mingw32-"
 		
-		if os.system(mingw32+"gcc --version >/dev/null") != 0 :
+		if os.system(mingw32+"gcc --version &>/dev/null") != 0 :
 			mingw32 = mingw
 	
 	if (os.getenv("MINGW32_PREFIX")):
@@ -173,13 +173,30 @@ def get_flags():
 		('theora','no'),
 	]
 			
+def build_res_file( target, source, env ):
 
+	cmdbase = ""
+	if (env["bits"] == "32"):
+		cmdbase = env['mingw_prefix']
+	else:
+		cmdbase = env['mingw_prefix_64']
+	CPPPATH = env['CPPPATH']
+	cmdbase = cmdbase + 'windres --include-dir . '
+	import subprocess
+	for x in range(len(source)):
+		cmd = cmdbase + '-i ' + str(source[x]) + ' -o ' + str(target[x])
+		try:
+			out = subprocess.Popen(cmd,shell = True,stderr = subprocess.PIPE).communicate()
+			if len(out[1]):
+				return 1
+		except:
+			return 1
+	return 0
 
 def configure(env):
 
 	env.Append(CPPPATH=['#platform/windows'])
-
-
+	env['is_mingw']=False
 	if (os.name=="nt" and os.getenv("VSINSTALLDIR")!=None):
 		#build using visual studio
 		env['ENV']['TMP'] = os.environ['TMP']
@@ -201,10 +218,16 @@ def configure(env):
 
 			env.Append(CCFLAGS=['/O2','/DDEBUG_ENABLED'])
 			env.Append(LINKFLAGS=['/SUBSYSTEM:CONSOLE'])
+		elif (env["target"]=="debug_release"):
+
+			env.Append(CCFLAGS=['/Z7','/Od'])
+			env.Append(LINKFLAGS=['/DEBUG'])
+			env.Append(LINKFLAGS=['/SUBSYSTEM:WINDOWS'])
+			env.Append(LINKFLAGS=['/ENTRY:mainCRTStartup'])
 
 		elif (env["target"]=="debug"):
 
-			env.Append(CCFLAGS=['/Zi','/DDEBUG_ENABLED','/DDEBUG_MEMORY_ENABLED','/DD3D_DEBUG_INFO','/Od'])
+			env.Append(CCFLAGS=['/Z7','/DDEBUG_ENABLED','/DDEBUG_MEMORY_ENABLED','/DD3D_DEBUG_INFO','/Od'])
 			env.Append(LINKFLAGS=['/SUBSYSTEM:CONSOLE'])
 			env.Append(LINKFLAGS=['/DEBUG'])
 
@@ -240,6 +263,7 @@ def configure(env):
 		env.Append(CCFLAGS=["/I"+DIRECTX_PATH+"/Include"])
 		env.Append(LIBPATH=[DIRECTX_PATH+"/Lib/x86"])
 		env['ENV'] = os.environ;
+		env["x86_opt_vc"]=True
 	else:
 
 		# Workaround for MinGW. See:
@@ -338,6 +362,7 @@ def configure(env):
 		env['AR'] = mingw_prefix+"ar"
 		env['RANLIB'] = mingw_prefix+"ranlib"
 		env['LD'] = mingw_prefix+"g++"
+		env["x86_opt_gcc"]=True
 
 		#env['CC'] = "winegcc"
 		#env['CXX'] = "wineg++"
@@ -348,7 +373,7 @@ def configure(env):
 		env.Append(LIBS=['mingw32','opengl32', 'dsound', 'ole32', 'd3d9','winmm','gdi32','iphlpapi','shlwapi','wsock32','kernel32'])
 
 		# if (env["bits"]=="32"):
-# #			env.Append(LIBS=['gcc_s'])
+			# env.Append(LIBS=['gcc_s'])
 			# #--with-arch=i686
 			# env.Append(CPPFLAGS=['-march=i686'])
 			# env.Append(LINKFLAGS=['-march=i686'])
@@ -360,6 +385,10 @@ def configure(env):
 		env.Append(CPPFLAGS=['-DMINGW_ENABLED'])
 		env.Append(LINKFLAGS=['-g'])
 
+		# resrc
+		env['is_mingw']=True
+		env.Append( BUILDERS = { 'RES' : env.Builder(action = build_res_file, suffix = '.o',src_suffix = '.rc') } )
+
 	import methods
 	env.Append( BUILDERS = { 'GLSL120' : env.Builder(action = methods.build_legacygl_headers, suffix = 'glsl.h',src_suffix = '.glsl') } )
 	env.Append( BUILDERS = { 'GLSL' : env.Builder(action = methods.build_glsl_headers, suffix = 'glsl.h',src_suffix = '.glsl') } )
@@ -367,4 +396,3 @@ def configure(env):
 	env.Append( BUILDERS = { 'GLSL120GLES' : env.Builder(action = methods.build_gles2_headers, suffix = 'glsl.h',src_suffix = '.glsl') } )
 
 	
-

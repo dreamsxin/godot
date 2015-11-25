@@ -59,6 +59,9 @@ void ProjectSettings::_notification(int p_what) {
 
 	if (p_what==NOTIFICATION_ENTER_TREE) {
 
+		search_button->set_icon(get_icon("Zoom","EditorIcons"));
+		clear_button->set_icon(get_icon("Close","EditorIcons"));
+
 		translation_list->connect("button_pressed",this,"_translation_delete");
 		_update_actions();
 		popup_add->add_icon_item(get_icon("Keyboard","EditorIcons"),"Key",InputEvent::KEY);
@@ -415,7 +418,7 @@ void ProjectSettings::_update_actions() {
 		item->set_cell_mode(0,TreeItem::CELL_MODE_CHECK);
 		item->set_text(0,name);
 		item->add_button(0,get_icon("Add","EditorIcons"),1);
-		item->add_button(0,get_icon("Del","EditorIcons"),2);
+		item->add_button(0,get_icon("Remove","EditorIcons"),2);
 		item->set_custom_bg_color(0,get_color("prop_subsection","Editor"));
 		item->set_editable(0,true);
 		item->set_checked(0,pi.usage&PROPERTY_USAGE_CHECKED);
@@ -483,7 +486,7 @@ void ProjectSettings::_update_actions() {
 					action->set_icon(0,get_icon("JoyAxis","EditorIcons"));
 				} break;
 			}
-			action->add_button(0,get_icon("Del","EditorIcons"),2);
+			action->add_button(0,get_icon("Remove","EditorIcons"),2);
 			action->set_metadata(0,i);
 		}
 	}
@@ -771,18 +774,47 @@ void ProjectSettings::_autoload_add() {
 
 void ProjectSettings::_autoload_delete(Object *p_item,int p_column, int p_button) {
 
+
 	TreeItem *ti=p_item->cast_to<TreeItem>();
 	String name = "autoload/"+ti->get_text(0);
 
-	undo_redo->create_action("Remove Autoload");
-	undo_redo->add_do_property(Globals::get_singleton(),name,Variant());
-	undo_redo->add_undo_property(Globals::get_singleton(),name,Globals::get_singleton()->get(name));
-	undo_redo->add_undo_method(Globals::get_singleton(),"set_persisting",name,true);
-	undo_redo->add_do_method(this,"_update_autoload");
-	undo_redo->add_undo_method(this,"_update_autoload");
-	undo_redo->add_do_method(this,"_settings_changed");
-	undo_redo->add_undo_method(this,"_settings_changed");
-	undo_redo->commit_action();
+	if (p_button==0) {
+		//delete
+		undo_redo->create_action("Remove Autoload");
+		undo_redo->add_do_property(Globals::get_singleton(),name,Variant());
+		undo_redo->add_undo_property(Globals::get_singleton(),name,Globals::get_singleton()->get(name));
+		undo_redo->add_undo_method(Globals::get_singleton(),"set_persisting",name,true);
+		undo_redo->add_do_method(this,"_update_autoload");
+		undo_redo->add_undo_method(this,"_update_autoload");
+		undo_redo->add_do_method(this,"_settings_changed");
+		undo_redo->add_undo_method(this,"_settings_changed");
+		undo_redo->commit_action();
+	} else {
+
+		TreeItem *swap;
+
+		if (p_button==1) {
+			swap=ti->get_prev();
+		} else if (p_button==2) {
+			swap=ti->get_next();
+		}
+		if (!swap)
+			return;
+
+		String swap_name= "autoload/"+swap->get_text(0);
+
+		undo_redo->create_action("Move Autoload");
+		undo_redo->add_do_method(Globals::get_singleton(),"set_order",swap_name,Globals::get_singleton()->get_order(name));
+		undo_redo->add_do_method(Globals::get_singleton(),"set_order",name,Globals::get_singleton()->get_order(swap_name));
+		undo_redo->add_undo_method(Globals::get_singleton(),"set_order",swap_name,Globals::get_singleton()->get_order(swap_name));
+		undo_redo->add_undo_method(Globals::get_singleton(),"set_order",name,Globals::get_singleton()->get_order(name));
+		undo_redo->add_do_method(this,"_update_autoload");
+		undo_redo->add_undo_method(this,"_update_autoload");
+		undo_redo->add_do_method(this,"_settings_changed");
+		undo_redo->add_undo_method(this,"_settings_changed");
+		undo_redo->commit_action();
+
+	}
 
 }
 
@@ -1134,12 +1166,39 @@ void ProjectSettings::_update_autoload() {
 		TreeItem *t = autoload_list->create_item(root);
 		t->set_text(0,name);
 		t->set_text(1,Globals::get_singleton()->get(pi.name));
+		t->add_button(1,get_icon("MoveUp","EditorIcons"),1);
+		t->add_button(1,get_icon("MoveDown","EditorIcons"),2);
 		t->add_button(1,get_icon("Del","EditorIcons"),0);
 
 	}
 
 }
 
+void ProjectSettings::_toggle_search_bar(bool p_pressed) {
+
+	globals_editor->set_use_filter(p_pressed);
+
+	if (p_pressed) {
+
+		search_bar->show();
+		add_prop_bar->hide();
+		search_box->grab_focus();
+		search_box->select_all();
+	} else {
+
+		search_bar->hide();
+		add_prop_bar->show();
+	}
+}
+
+void ProjectSettings::_clear_search_box() {
+
+	if (search_box->get_text()=="")
+		return;
+
+	search_box->clear();
+	globals_editor->update_tree();
+}
 
 void ProjectSettings::_bind_methods() {
 
@@ -1181,6 +1240,9 @@ void ProjectSettings::_bind_methods() {
 	ObjectTypeDB::bind_method(_MD("_update_autoload"),&ProjectSettings::_update_autoload);
 	ObjectTypeDB::bind_method(_MD("_autoload_delete"),&ProjectSettings::_autoload_delete);
 
+	ObjectTypeDB::bind_method(_MD("_clear_search_box"),&ProjectSettings::_clear_search_box);
+	ObjectTypeDB::bind_method(_MD("_toggle_search_bar"),&ProjectSettings::_toggle_search_bar);
+
 }
 
 ProjectSettings::ProjectSettings(EditorData *p_data) {
@@ -1201,87 +1263,93 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 	//tab_container->set_anchor_and_margin(MARGIN_TOP,ANCHOR_BEGIN, 15 );
 	//tab_container->set_anchor_and_margin(MARGIN_BOTTOM,ANCHOR_END, 35 );
 
-	Control *props_base = memnew( Control );
+	VBoxContainer *props_base = memnew( VBoxContainer );
+	props_base->set_alignment(BoxContainer::ALIGN_BEGIN);
+	props_base->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	tab_container->add_child(props_base);
 	props_base->set_name("General");
-	globals_editor = memnew( PropertyEditor );
-	props_base->add_child(globals_editor);
-	globals_editor->set_area_as_parent_rect();
-	globals_editor->hide_top_label();
-	globals_editor->set_anchor_and_margin(MARGIN_TOP,ANCHOR_BEGIN, 55 );
-	globals_editor->set_anchor_and_margin(MARGIN_BOTTOM,ANCHOR_END, 35 );
-	globals_editor->set_anchor_and_margin(MARGIN_LEFT,ANCHOR_BEGIN, 5 );
-	globals_editor->set_anchor_and_margin(MARGIN_RIGHT,ANCHOR_END, 5 );
-	globals_editor->set_capitalize_paths(false);
-	globals_editor->get_scene_tree()->connect("cell_selected",this,"_item_selected");
-	globals_editor->connect("property_toggled",this,"_item_checked");
-	globals_editor->connect("property_edited",this,"_settings_prop_edited");
 
+	HBoxContainer *hbc = memnew( HBoxContainer );
+	hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	props_base->add_child(hbc);
+
+	search_button = memnew( ToolButton );
+	search_button->set_toggle_mode(true);
+	search_button->set_pressed(false);
+	search_button->set_text("Search");
+	hbc->add_child(search_button);
+	search_button->connect("toggled",this,"_toggle_search_bar");
+
+	hbc->add_child( memnew( VSeparator ) );
+
+	add_prop_bar = memnew( HBoxContainer );
+	add_prop_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	hbc->add_child(add_prop_bar);
 
 	Label *l = memnew( Label );
-	props_base->add_child(l);
-	l->set_pos(Point2(6,5));
+	add_prop_bar->add_child(l);
 	l->set_text("Category:");
 
-
-	l = memnew( Label );
-	l->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	props_base->add_child(l);
-	l->set_begin(Point2(0.21,5));
-	l->set_text("Property:");
-
-	l = memnew( Label );
-	l->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	props_base->add_child(l);
-	l->set_begin(Point2(0.51,5));
-	l->set_text("Type:");
-
 	category = memnew( LineEdit );
-	props_base->add_child(category);
-	category->set_anchor(MARGIN_RIGHT,ANCHOR_RATIO);
-	category->set_begin( Point2(5,25) );
-	category->set_end( Point2(0.20,26) );
+	category->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	add_prop_bar->add_child(category);
 	category->connect("text_entered",this,"_item_adds");
 
+	l = memnew( Label );
+	add_prop_bar->add_child(l);
+	l->set_text("Property:");
+
 	property = memnew( LineEdit );
-	props_base->add_child(property);
-	property->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	property->set_anchor(MARGIN_RIGHT,ANCHOR_RATIO);
-	property->set_begin( Point2(0.21,25) );
-	property->set_end( Point2(0.50,26) );
+	property->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	add_prop_bar->add_child(property);
 	property->connect("text_entered",this,"_item_adds");
 
+	l = memnew( Label );
+	add_prop_bar->add_child(l);
+	l->set_text("Type:");
 
 	type = memnew( OptionButton );
-	props_base->add_child(type);
-	type->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	type->set_anchor(MARGIN_RIGHT,ANCHOR_RATIO);
-	type->set_begin( Point2(0.51,25) );
-	type->set_end( Point2(0.70,26) );
+	type->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	add_prop_bar->add_child(type);
 	type->add_item("bool");
 	type->add_item("int");
 	type->add_item("float");
 	type->add_item("string");
 
 	Button *add = memnew( Button );
-	props_base->add_child(add);
-	add->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	add->set_anchor(MARGIN_RIGHT,ANCHOR_RATIO);
-	add->set_begin( Point2(0.71,25) );
-	add->set_end( Point2(0.85,26) );
+	add_prop_bar->add_child(add);
 	add->set_text("Add");
 	add->connect("pressed",this,"_item_add");
 
 	Button *del = memnew( Button );
-	props_base->add_child(del);
-	del->set_anchor(MARGIN_LEFT,ANCHOR_RATIO);
-	del->set_anchor(MARGIN_RIGHT,ANCHOR_END);
-	del->set_begin( Point2(0.86,25) );
-	del->set_end( Point2(5,26) );
+	add_prop_bar->add_child(del);
 	del->set_text("Del");
 	del->connect("pressed",this,"_item_del");
 
-	/*
+	search_bar = memnew( HBoxContainer );
+	search_bar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	hbc->add_child(search_bar);
+	search_bar->hide();
+
+	search_box = memnew( LineEdit );
+	search_box->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	search_bar->add_child(search_box);
+
+	clear_button = memnew( ToolButton );
+	search_bar->add_child(clear_button);
+	clear_button->connect("pressed",this,"_clear_search_box");
+
+	globals_editor = memnew( PropertyEditor );
+	props_base->add_child(globals_editor);
+	globals_editor->hide_top_label();
+	globals_editor->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	globals_editor->register_text_enter(search_box);
+	globals_editor->set_capitalize_paths(false);
+	globals_editor->get_scene_tree()->connect("cell_selected",this,"_item_selected");
+	globals_editor->connect("property_toggled",this,"_item_checked");
+	globals_editor->connect("property_edited",this,"_settings_prop_edited");
+
+/*
 	Button *save = memnew( Button );
 	props_base->add_child(save);
 
@@ -1294,17 +1362,16 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 	save->set_text("Save");
 	save->connect("pressed",this,"_save");
 */
+
+	hbc = memnew( HBoxContainer );
+	props_base->add_child(hbc);
+
 	popup_platform = memnew( MenuButton );
 	popup_platform->set_text("Copy To Platform..");
 	popup_platform->set_disabled(true);
-	props_base->add_child(popup_platform);
+	hbc->add_child(popup_platform);
 
-	popup_platform->set_anchor(MARGIN_LEFT,ANCHOR_BEGIN);
-	popup_platform->set_anchor(MARGIN_RIGHT,ANCHOR_BEGIN);
-	popup_platform->set_anchor(MARGIN_TOP,ANCHOR_END);
-	popup_platform->set_anchor(MARGIN_BOTTOM,ANCHOR_END);
-	popup_platform->set_begin( Point2(10,28) );
-	popup_platform->set_end( Point2(150,20) );
+	hbc->add_spacer();
 
 	List<StringName> ep;
 	EditorImportExport::get_singleton()->get_export_platforms(&ep);
@@ -1450,9 +1517,9 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 		translation_list->set_v_size_flags(SIZE_EXPAND_FILL);
 		tmc->add_child(translation_list);
 
-		translation_file_open=memnew( FileDialog );
+		translation_file_open=memnew( EditorFileDialog );
 		add_child(translation_file_open);
-		translation_file_open->set_mode(FileDialog::MODE_OPEN_FILE);
+		translation_file_open->set_mode(EditorFileDialog::MODE_OPEN_FILE);
 		translation_file_open->connect("file_selected",this,"_translation_add");
 
 	}
@@ -1477,9 +1544,9 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 		tmc->add_child(translation_remap);
 		translation_remap->connect("button_pressed",this,"_translation_res_delete");
 
-		translation_res_file_open=memnew( FileDialog );
+		translation_res_file_open=memnew( EditorFileDialog );
 		add_child(translation_res_file_open);
-		translation_res_file_open->set_mode(FileDialog::MODE_OPEN_FILE);
+		translation_res_file_open->set_mode(EditorFileDialog::MODE_OPEN_FILE);
 		translation_res_file_open->connect("file_selected",this,"_translation_res_add");
 
 		thb = memnew( HBoxContainer);
@@ -1507,9 +1574,9 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 		translation_remap_options->connect("item_edited",this,"_translation_res_option_changed");
 		translation_remap_options->connect("button_pressed",this,"_translation_res_option_delete");
 
-		translation_res_option_file_open=memnew( FileDialog );
+		translation_res_option_file_open=memnew( EditorFileDialog );
 		add_child(translation_res_option_file_open);
-		translation_res_option_file_open->set_mode(FileDialog::MODE_OPEN_FILE);
+		translation_res_option_file_open->set_mode(EditorFileDialog::MODE_OPEN_FILE);
 		translation_res_option_file_open->connect("file_selected",this,"_translation_res_option_add");
 
 	}
@@ -1548,9 +1615,9 @@ ProjectSettings::ProjectSettings(EditorData *p_data) {
 		autoload_list->set_v_size_flags(SIZE_EXPAND_FILL);
 		avb->add_margin_child("List:",autoload_list,true);
 
-		autoload_file_open=memnew( FileDialog );
+		autoload_file_open=memnew( EditorFileDialog );
 		add_child(autoload_file_open);
-		autoload_file_open->set_mode(FileDialog::MODE_OPEN_FILE);
+		autoload_file_open->set_mode(EditorFileDialog::MODE_OPEN_FILE);
 		autoload_file_open->connect("file_selected",this,"_autoload_file_callback");
 
 		autoload_list->set_columns(2);
